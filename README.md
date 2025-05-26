@@ -1,145 +1,156 @@
-𝙋𝙍𝙊𝙓𝘼𝙍𝘾: The Proxmark ESP32 Interface
+🧊 PROXARC: The Proxmark + ESP32 Web Interface
 
-Serious Tools for Wireless Signals
+Serious Tools for Wireless Signals — Built for the Field
 
 🔧 What is PROXARC?
 
-PROXARC is a hybrid firmware + web-based interface that transforms the powerful Proxmark3 (Iceman fork) into a portable, wireless, ESP32-S3-driven tool — accessible via any browser.
+PROXARC (Proxmark + ESP32 Architecture) is a cutting-edge hybrid firmware and web interface project that elevates the legendary Iceman Proxmark3 fork by giving it wireless life through an ESP32-S3.
 
-This is not a replacement for Iceman. This is a bridge, a framework, and a way forward for RFID/NFC experimentation, red-teaming, and field ops without relying on clunky desktops or outdated GUI tools.
+Hosted entirely on the ESP32-S3 via an OTG serial connection, it creates a mobile-first, touch-ready web interface to run commands, scan cards, and launch attacks — all from your phone or laptop. No drivers. No desktop GUI. No friction.
 
-Using USB-OTG via UART and served from the ESP32 itself, PROXARC provides a slick, powerful web UI to command your Proxmark directly, no software install needed.
+This is not a fork of Iceman. It's the next evolution in interfacing with it.
 
-🧠 Project Vision
+🧠 Vision
 
-Empower hackers, researchers, and developers with zero-setup wireless control of their Proxmark3.
+Enable zero-install, wireless command and control of the Proxmark3.
 
-Remove friction from field work: scan, clone, emulate, and run scripts directly from your phone.
+Deliver field-ready RFID/NFC tools that run on battery, hotspot, or USB.
 
-Elevate Proxmark's usability into a new era of modular, mobile-first tooling.
+Build a modular browser UI for rapid access to advanced capabilities.
 
-✒️ Interface Style & UX Philosophy
+🖥️ Interface Style & Feel
 
-Dark cyberpunk aesthetic — designed for serious professionals.
+⚫️ Cyberpunk dark theme, bold contrast for field readability
 
-Mobile-first layout with touch-friendly controls.
+📱 Responsive and mobile-first UI
 
-Live console, real-time logs, and animated feedback.
+🧩 Modular tool layout: Cards, Emulation, Dumps, Scripts, Console
 
-Module-based layout: Cards, Attack, Emulation, Dump Viewer, Scripts, OTA updates.
+📟 Real-time logs, terminal input, and visual feedback animations
 
-⚙️ Core Architecture
+🛠️ Architecture
 
-ESP32-S3 Layer
+1. ESP32-S3 Layer
 
-USB OTG Host mode to communicate with Proxmark via serial.
+Acts as USB OTG Host to the Proxmark
 
-Async web server (ESPAsyncWebServer) serving a modern web UI.
+Async Web Server (ESPAsyncWebServer)
 
-REST and WebSocket interfaces for full duplex communication.
+WebSocket + REST API for full command control
 
-Proxmark3 (Iceman Fork)
+2. Proxmark3 (Iceman Fork)
 
-Plugged into ESP32-S3 via micro USB (UART-based OTG).
+Communicates via USB-UART from Proxmark to ESP32
 
-Controlled via custom ESP32 shell wrappers for key Iceman CLI commands.
+Executes pm3 CLI commands via passthrough serial
 
-Web Interface
+3. Web Interface
 
-Hosted entirely on ESP32 flash memory.
+Served directly from onboard ESP32 memory
 
-Pure HTML/CSS/JS + lightweight framework (like Alpine.js or VanillaJS).
+HTML/JS/CSS (Vanilla or Alpine.js)
 
-Terminal view for raw command input.
+Auto-detect and handle Proxmark responses in-browser
 
-🔥 What Can It Do? (Initial Feature Set)
+🔥 Core Capabilities
 
-Card Scanning
+Scan Tags (13.56 MHz / 125 kHz)
 
-ISO14443A/B, HID, 125kHz, 13.56MHz detection.
+ISO14443A/B, HID, NFC Type 2
 
-View UID, ATQA, SAK, and type instantly.
+Display UID, ATQA, SAK, card type
 
-Cloning & Emulation
+Clone & Emulate
 
-Dump tag memory in common formats (binary, hex, TLV).
+Dump tag data in binary, hex, TLV
 
-Emulate Mifare Classic, NFC Type 2, HID, etc.
+Emulate Mifare Classic, HID, T5577
 
-Attacks
+Attack Scripts
 
-Integrate with Iceman attack scripts: nested, static nonce, hardnested (beta).
+Run Iceman’s attack suites like static nonce and hardnested
 
-Live Console
+Live Terminal
 
-Type pm3 commands directly from browser.
+Send raw pm3 commands
 
-Full console history + autocomplete.
+Real-time command output & history
 
-Storage
+Local Storage
 
-Save dumps in internal flash or upload/export.
+Save dumps, logs, and profiles to ESP32 flash
 
-Manage tags, logs, and dumps via browser UI.
+Export/download via browser
 
-🔐 Use Cases
+🧪 Use Cases
 
-On-Site Physical Testing: Clone or sniff badges from a phone, no laptop.
+🔍 On-Site Red Teaming: Clone a badge in seconds, from your phone
 
-Workshops & Demos: Show live attacks in training scenarios.
+🎓 Training & Demos: Show RFID/NFC live in class or workshops
 
-DIY Smartcard Projects: Build access control systems & clone test cards.
+🛠 DIY Projects: Build emulation rigs or test your access system
 
-Pentesting Toolkit: Throw it in a bag, plug and play anywhere.
+🧰 Portable Toolkit: Throw it in your bug-out bag with a battery
 
-⚡ Getting Started
+⚙️ Setup & Getting Started
 
-Hardware You Need:
+Required Hardware
 
-ESP32-S3 dev board with USB-OTG support.
+ESP32-S3 board w/ USB-OTG support
 
-Proxmark3 (RDV4 or Proxmark3 Easy).
+Proxmark3 Easy / RDV4
 
-USB OTG cable (ESP32-S3 Host -> Proxmark Client).
+USB OTG adapter cable
 
-Install:
+Flash the Firmware
 
 git clone https://github.com/youruser/proxarc
 cd proxarc
 idf.py set-target esp32s3
 idf.py build flash monitor
 
-Usage:
+Using It
 
-Connect to ESP32 Wi-Fi AP or join your network.
+Power the ESP32
 
-Open browser to http://prox.local or IP.
+Connect Proxmark3 to ESP32 via USB
 
-Plug in Proxmark to ESP32 USB.
+Open browser to http://prox.local (or assigned IP)
 
-Run commands or use modules from UI.
+Start scanning, emulating, or running pm3 commands
 
-🧪 Roadmap & Expansion Ideas
+🚧 Roadmap
 
-🔋 Battery-powered mobile version w/ OLED status screen
+🪫 Battery support + OLED display for standalone mode
 
-🧱 Plugin framework for attack modules (via JS + REST)
+🔌 Plugin system for 3rd-party scripts/modules
 
-📶 BLE control via ESP32 BLE HID interface
+📡 BLE/WebUSB for wireless console & updates
 
-🌐 Cloud dashboard to sync and backup tags
+☁️ Sync system for backing up dumps to cloud
 
-🔒 Authentication layer + encrypted local storage
+🔐 WebAuthn-based login + encrypted local flash storage
 
 🤝 Contributing
 
-If you're serious about embedded RF tools, we want your help. Open issues, fork and PR, or hit us up with ideas. This is a tool built for the field, by those who actually use it.
+This project is built by field operators for real-world use. If you know embedded, web UI, or RFID/NFC hacking, join us.
 
-📜 License
+Fork it
 
-MIT License — use, remix, and make it yours.
+Build it
 
-Made by hackers, for hackers.
+Add modules or features
 
-PROXARC is where embedded engineering meets elite RFID tooling.
+File issues with field feedback
+
+All eyes, no ego.
+
+📄 License
+
+MIT License — build, improve, remix, and share.
+
+🧠 Built for hackers. Powered by open tools.
+
+🛰 PROXARC: Your Proxmark, Untethered.
+
 
