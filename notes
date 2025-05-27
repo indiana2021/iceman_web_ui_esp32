@@ -1,0 +1,920 @@
+Proxarch: A Web-Based USB Interface for Proxmark3 using ESP32-S3
+1. Introduction
+1.1 Project Overview: ESP32-S3 as a Web-Based USB Host for Proxmark3 ("Proxarch")
+The Proxmark3 stands as a highly capable and versatile instrument in the field of Radio Frequency Identification (RFID) research and security analysis. Traditionally, its operation involves a client application running on a host computer. This project introduces "Proxarch," a system designed to enhance the usability and accessibility of the Proxmark3 by leveraging the capabilities of the ESP32-S3 microcontroller. The ESP32-S3, a powerful System-on-Chip (SoC) with integrated Wi-Fi, Bluetooth, and native USB On-The-Go (OTG) functionalities , serves as the core of Proxarch.   
+
+The primary aim of this project is to develop a web-based interface, hosted directly on the ESP32-S3, which allows users to control a Proxmark3 connected via a USB interface. The ESP32-S3 will function as a USB host, communicating with the Proxmark3 (which acts as a USB device), and simultaneously serve a web page accessible over Wi-Fi. This approach effectively decouples the Proxmark3 from a dedicated PC for many common tasks, offering a more portable and flexible interaction model. Users can interact with the Proxmark3 using any web browser-enabled device, such as a smartphone, tablet, or laptop, connected to the same local network as the ESP32-S3. This shift significantly improves convenience, particularly for fieldwork or situations where setting up a full client environment is impractical.
+
+1.2 Key Objectives and Deliverables
+The central deliverable of this project is a fully functional Arduino sketch for the ESP32-S3. This sketch will implement the necessary logic for USB host communication, web server hosting, and Proxmark3 command execution. The specific objectives include:
+
+A working Arduino sketch: The firmware for the ESP32-S3 that orchestrates all functionalities.
+Minimalistic dark web UI: A clean, uncluttered web interface with a dark theme for comfortable viewing, enabling interaction with the Proxmark3.
+Basic Proxmark3 function support: Initial support for fundamental Proxmark3 commands, including hardware version checks, antenna tuning, and basic Low Frequency (LF) and High Frequency (HF) tag searching. Mode switching will be implicitly handled by the nature of the commands executed.
+Clear documentation: Comprehensive explanations within the code and accompanying this report.
+List of required Arduino libraries: A clear enumeration of all software dependencies.
+Connectivity: The system will utilize a USB-C connection on the ESP32-S3 side and a micro-USB connection on the Proxmark3 side.
+Beyond the immediate goal of providing a web interface, this system establishes a foundation for more advanced applications. An ESP32-S3 capable of programmatically controlling a Proxmark3 can be extended for automated RFID task execution, potentially triggered by various events or scheduled routines, without requiring direct user interaction through the web UI for every step. This opens avenues for custom RFID tools and automated testing or interaction scenarios.
+
+2. System Architecture and Components
+The Proxarch system integrates hardware and software components to achieve its objective of web-based Proxmark3 control.
+
+2.1 Hardware Components
+ESP32-S3: This microcontroller is the heart of the Proxarch system. It performs several critical roles:
+Central Controller: Executes the main application logic.
+USB Host: Manages the USB connection to the Proxmark3, leveraging its native USB OTG peripheral. The USB D+ and D- signals are typically available on GPIO20 and GPIO19, respectively.   
+Web Server: Hosts the "Proxarch" web interface, making it accessible over Wi-Fi.
+Proxmark3: This device acts as the RFID peripheral. In this configuration, it connects to the ESP32-S3 as a USB device, specifically appearing as a USB CDC-ACM (Communications Device Class - Abstract Control Model) virtual serial port.   
+2.2 Software Components
+ESP32-S3 Firmware (Arduino Sketch): This is the custom software developed for the ESP32-S3. Its responsibilities include:
+Initializing and managing the Wi-Fi connection.
+Setting up the ESP32-S3's USB peripheral in host mode.
+Detecting and communicating with the connected Proxmark3.
+Running an asynchronous web server to serve the Proxarch UI.
+Handling HTTP requests from the web UI, translating them into Proxmark3 commands, and sending responses back to the UI.
+Optionally, managing WebSocket connections for real-time data streaming from the Proxmark3.
+Web UI ("Proxarch"): This is the user-facing part of the system, rendered in a web browser. It comprises:
+HTML: Defines the structure of the web page, including buttons for commands, display areas for output, and any other interactive elements.
+CSS: Provides the styling for the minimalistic dark theme, ensuring a clean and readable interface.
+JavaScript: Handles client-side logic, such as capturing button clicks, sending asynchronous requests (e.g., via fetch API or XMLHttpRequest) to the ESP32-S3's web server, and dynamically updating the web page with responses received from the Proxmark3.
+The ESP32-S3, while powerful, will be concurrently managing multiple complex tasks: the Wi-Fi stack, a TCP/IP stack for the web server, the USB host stack, and the serial communication logic with the Proxmark3. This necessitates efficient firmware design, particularly the use of asynchronous operations for network and USB interactions, to maintain responsiveness and manage resources like RAM and processing power effectively. This becomes especially pertinent if the system is later expanded to handle more complex Proxmark3 operations or a larger number of simultaneous web clients. The choice of libraries like ESPAsyncWebServer is crucial in this regard.
+
+2.3 Communication Flow
+The interaction between the user, the ESP32-S3, and the Proxmark3 follows a defined path:
+
+The user accesses the Proxarch web UI through a web browser on a device connected to the same Wi-Fi network as the ESP32-S3.
+User actions on the web UI (e.g., clicking a command button) trigger JavaScript functions that send HTTP requests (or WebSocket messages) to specific endpoints on the ESP32-S3's web server.
+The ESP32-S3 firmware receives these requests, parses them, and translates them into the corresponding Proxmark3 command strings.
+The ESP32-S3, acting as a USB host, sends these commands over the USB cable to the Proxmark3.
+The Proxmark3 processes the command and sends its output back to the ESP32-S3 via the USB connection.
+The ESP32-S3 firmware reads this output, potentially processes or formats it, and then sends it back to the originating web client, typically as part of an HTTP response or over a WebSocket connection.
+The JavaScript on the web UI receives this data and updates the display area, showing the Proxmark3's response to the user.
+This architecture, with its distinct software layers (USB host communication, web server, Proxmark3 command handling), inherently promotes a modular design. Such modularity is advantageous for future development, allowing individual components to be updated or expanded with relative independence. For instance, enhancing the web UI would not necessarily require deep modifications to the USB communication logic, and vice-versa.
+
+3. Hardware Setup and Connections
+Proper hardware setup is crucial for the Proxarch system to function correctly. This section details the necessary connections and considerations.
+
+3.1 ESP32-S3 USB Host Configuration
+The ESP32-S3's native USB peripheral is utilized in Host mode. The USB D+ and D- signals, essential for USB communication, are internally routed to GPIO20 and GPIO19, respectively, on the ESP32-S3 chip. Many ESP32-S3 development boards provide a dedicated USB connector (often USB-C) wired to these pins for native USB functionality. This port is sometimes labeled "USB" or "OTG".   
+
+It is critical to distinguish this native USB port from any other USB port on the development board that might be intended solely for programming and serial debugging via an onboard USB-to-Serial converter chip (e.g., CP210x, CH340). Connecting the Proxmark3 to such a UART-USB port will not work, as these ports cannot function in USB host mode. The firmware developed in this project will configure the native USB port for host operation.   
+
+3.2 Proxmark3 Connection
+The Proxmark3 device typically features a micro-USB port for client communication. This is the port that will be connected to the ESP32-S3.
+
+3.3 Cabling Requirements
+A USB cable with a USB-C connector on one end (for the ESP32-S3) and a Micro-USB connector on the other end (for the Proxmark3) is required. This cable must be a data-capable cable, not a "charge-only" cable, as the latter lacks the necessary data lines. While some ESP32-S3 boards with USB-C ports handle host mode negotiation directly, the cable itself should ideally support OTG functionality or be used with an OTG adapter if the specific ESP32-S3 board requires it to enable host mode. However, the ESP32-S3 firmware will programmatically attempt to configure the port for host mode. The quality of the USB cable can also impact the stability of the connection; a known-good, high-quality data cable is recommended to avoid intermittent detection issues or data corruption.
+
+3.4 Power Considerations
+When the ESP32-S3 operates as a USB host, it is responsible for providing power (VBUS) to the connected USB device, in this case, the Proxmark3. The ESP32-S3 itself must have an adequate power supply, either through its own USB connection (e.g., to a computer or USB power adapter) or a battery. The power demands of the Proxmark3 should be within the capabilities of the ESP32-S3's USB host power delivery.
+
+Table 3.1: ESP32-S3 Pin Connections for USB Host (Native USB Port)
+For clarity, the essential connections for the ESP32-S3's native USB port when acting as a host are summarized below. These GPIO assignments are standard for the ESP32-S3.
+
+ESP32-S3 Signal	ESP32-S3 GPIO	USB Standard Pin	Notes
+USB D+	GPIO20	D+	Standard USB Data Plus line 
+USB D-	GPIO19	D-	Standard USB Data Minus line 
+VBUS	(ESP32-S3 controlled)	VBUS (5V)	ESP32-S3 provides power to the Proxmark3
+GND	GND	GND	Common Ground connection
+  
+Ensuring the correct physical connections, particularly using the ESP32-S3's native USB port and a suitable cable, is a fundamental prerequisite for the success of this project.
+
+4. ESP32-S3 Firmware Development: USB Host for Proxmark3
+The firmware for the ESP32-S3 is the core of the Proxarch system, responsible for managing USB host communication with the Proxmark3.
+
+4.1 Configuring ESP32-S3 for USB Host Mode (CDC-ACM)
+The ESP32-S3 must be configured to operate as a USB Host. Specifically, it needs to support the CDC-ACM (Communication Device Class - Abstract Control Model) class, as this is how the Proxmark3 identifies itself when connected via USB. This involves initializing the ESP32-S3's USB peripheral, handling the enumeration process when the Proxmark3 is connected, establishing communication channels, and managing data transfers (both sending commands and receiving responses).   
+
+4.2 Recommended Library: bertmelis/USBHostSerial
+For simplifying USB host development in the Arduino environment, the bertmelis/USBHostSerial library is recommended.   
+
+Rationale: This library is specifically designed to provide an "Arduino Serial"-like interface (e.g., Serial.begin, Serial.print, Serial.read, Serial.available) for USB CDC devices when the ESP32-S3 is acting as a host. This abstraction layer significantly simplifies interaction with devices like the Proxmark3, aligning well with the project's requirements. The library builds upon Espressif's underlying USB Host stack and the TinyUSB library.   
+Dependencies: The USBHostSerial library itself has dependencies on several ESP-IDF components :   
+Espressif TinyUSB fork
+Espressif's additions to TinyUSB
+USB Host CDC-ACM Class Driver
+Virtual COM Port Service
+Potentially, device-specific VCP (Virtual COM Port) drivers, although the Proxmark3 should generally work with the generic CDC-ACM driver.
+Installation and Setup in Arduino IDE: The "work in progress" nature of USBHostSerial  and its reliance on ESP-IDF components mean that installation in the Arduino IDE might require careful attention.   
+ESP32 Board Package: Ensure the latest stable version of the ESP32 board support package is installed in the Arduino IDE. Arduino core versions 3.0.0 and later (based on ESP-IDF 5.1+) offer improved TinyUSB integration, which is beneficial.   
+Download USBHostSerial: Obtain the library as a ZIP file from its GitHub repository (bertmelis/USBHostSerial).
+Install Library: In the Arduino IDE, navigate to Sketch > Include Library > Add.ZIP Library... and select the downloaded file.
+Managing Dependencies: The ESP-IDF component dependencies are a critical aspect. Ideally, the ESP32 Arduino core and the USBHostSerial library should manage these. However, if compilation errors related to missing TinyUSB or USB host components occur, it may indicate an issue with how these dependencies are resolved in the Arduino environment. Users might need to consult the library's GitHub issues page  for troubleshooting tips or consider using PlatformIO, which offers more granular control over ESP-IDF components.   
+Alternative Approach: While the bertmelis/USBHostSerial library is preferred for its Arduino-friendly API, a more direct (and complex) approach involves using the ESP-IDF USB Host library and TinyUSB APIs directly. This would provide more control but significantly increase development effort and deviate from a typical Arduino sketch structure.   
+Implementing USB Host functionality on a microcontroller is inherently complex. Libraries like USBHostSerial abstract away many of the low-level details of device enumeration, class driver management, and transfer handling. However, the dependency on a library that is still under development introduces a risk factor. Should issues arise that cannot be resolved within the Arduino abstraction, debugging might necessitate a deeper understanding of the underlying TinyUSB and ESP-IDF USB host stacks.
+
+4.3 Key USBHostSerial API Usage
+Based on the library's goal to provide a "Serial-like" interface, its API is expected to include functions analogous to the standard Arduino Serial object:
+
+USBHostSerial.begin(config): Initializes the USB host stack and the CDC-ACM driver. Configuration might involve specifying VID/PID if targeting a specific device, though generic CDC should work for Proxmark3.
+USBHostSerial.connected(): Returns true if a USB CDC device (the Proxmark3) is connected and enumerated.
+USBHostSerial.available(): Returns the number of bytes available to read from the Proxmark3.
+USBHostSerial.read(): Reads a single byte from the Proxmark3.
+USBHostSerial.readBytes(buffer, length): Reads multiple bytes into a buffer.
+USBHostSerial.write(byte) / USBHostSerial.print(string) / USBHostSerial.println(string): Sends data/commands to the Proxmark3.
+Callbacks: The library likely provides callbacks for events such as device connection and disconnection, allowing the firmware to react accordingly.
+4.4 Establishing and Managing Connection with Proxmark3
+The firmware will need logic to:
+
+Periodically check for Proxmark3 connection using USBHostSerial.connected() or through connection event callbacks.
+Once connected, indicate this status (e.g., via serial debug output and potentially to the web UI).
+Gracefully handle disconnections, clear any relevant state, and attempt to re-establish communication if the device is reconnected.
+4.5 Sending Commands and Receiving/Parsing Responses
+Communication with the Proxmark3 involves sending command strings and processing its textual output.
+
+Sending Commands: Proxmark3 commands are typically ASCII strings terminated by a newline character (\n). The USBHostSerial.println() method will be suitable for this.
+Receiving Responses: Proxmark3 output can be multi-line and varies in length. A robust reading mechanism is required. This usually involves reading bytes as they become available (USBHostSerial.available() and USBHostSerial.read()) into a buffer until a specific delimiter is encountered. The Proxmark3 command prompt, proxmark3> , serves as a reliable indicator that a command has finished executing and the device is ready for the next command. A timeout mechanism should also be implemented to prevent indefinite blocking if the expected prompt is not received.   
+Buffering: Responses should be accumulated in a sufficiently large buffer before being processed or relayed to the web UI.
+Error Handling: The firmware should attempt to detect error messages or unexpected output from the Proxmark3 (e.g., command execution timeouts or errors indicated in ) and report these appropriately.   
+Baud Rate: The baud rate setting for USB CDC-ACM connections is often nominal, as the actual data transfer speed is governed by the USB protocol itself. The USBHostSerial library, built on TinyUSB, should manage the underlying USB communication parameters.   
+A significant challenge in interfacing with the Proxmark3 is parsing its output. This output is not always strictly structured data; it can include prompts, status messages, informational text, hexadecimal data dumps, and error notifications. To present clear and concise information on the web UI, the ESP32 firmware will need to intelligently parse this output. Simply forwarding the raw output might be acceptable for an initial version, but more sophisticated parsing to extract key information or identify error conditions would enhance usability. This might involve looking for specific keywords or patterns in the response, or at a minimum, ensuring that the complete response for a given command is captured before displaying it.   
+
+Furthermore, all USB communication and web server interactions must be handled asynchronously to ensure the ESP32-S3 remains responsive. ESPAsyncWebServer is designed for this. The USB host communication, especially when waiting for Proxmark3 responses, should also be managed in a non-blocking manner (e.g., by checking USBHostSerial.available() in the main loop or using event-driven callbacks) to prevent freezing the device. This is critical because some Proxmark3 commands can take several seconds to complete.
+
+5. ESP32-S3 Firmware Development: Web Server (Proxarch UI)
+The ESP32-S3 will host a web server to provide the "Proxarch" user interface, enabling remote control of the Proxmark3.
+
+5.1 Web Server Implementation: ESPAsyncWebServer and AsyncTCP
+Rationale: The ESPAsyncWebServer library is chosen for its efficiency and non-blocking architecture, making it well-suited for resource-constrained devices like the ESP32. It can handle multiple client connections concurrently without significantly impacting other tasks running on the ESP32. AsyncTCP is the underlying asynchronous TCP library required by ESPAsyncWebServer.   
+Setup: The Arduino sketch will include initializing the Wi-Fi connection (connecting the ESP32-S3 to an existing network) and then starting the AsyncWebServer on a specific port (typically port 80 for HTTP).
+5.2 Designing the Minimalistic Dark UI
+The user interface should be clean, intuitive, and adhere to a dark theme for better readability in various lighting conditions and reduced eye strain, a preference often found among technical users.
+
+HTML (Embedded as C++ Raw String Literals): For a minimalistic UI, embedding the HTML, CSS, and JavaScript directly into the Arduino sketch as C++ raw string literals (using R"rawliteral(...)rawliteral") stored in PROGMEM is a viable approach. This simplifies deployment as no separate file system management (like SPIFFS or LittleFS) is needed for the web assets, although using a file system is an option for more complex UIs. The HTML will define:   
+A title for the page (e.g., "Proxarch - ESP32 Proxmark3 Interface").
+Sections for command buttons (e.g., "Get Version," "Tune Antennas").
+A dedicated, scrollable area (e.g., a <pre> tag or a styled <div>) to display output from the Proxmark3.
+Basic status indicators (e.g., "Proxmark3 Connected/Disconnected").
+CSS: Inline CSS within the HTML or a separate <style> block will be used to achieve the dark theme (e.g., dark background, light-colored text, appropriately styled buttons) and ensure a clean, uncluttered layout. The focus will be on clarity and ease of use.
+JavaScript (Client-Side): Embedded JavaScript will handle the dynamic aspects of the UI:
+Event listeners for button clicks.
+Functions to send command requests to the ESP32-S3. This will typically involve using the fetch API or XMLHttpRequest  to make asynchronous GET or POST requests to defined HTTP endpoints on the ESP32.   
+Functions to receive responses from the ESP32 and update the Proxmark3 output display area on the web page.
+Logic to update status indicators.
+5.3 Defining HTTP Endpoints for Proxmark3 Functions
+The ESPAsyncWebServer will be configured with specific HTTP endpoints that the client-side JavaScript will call. For example:
+
+server.on("/pm3cmd", HTTP_GET,(AsyncWebServerRequest *request){...});
+The actual command could be passed as a query parameter, e.g., /pm3cmd?command=hw_version.
+The server-side handler in the Arduino sketch will:
+Check if the Proxmark3 is connected.
+Extract the command from the request.
+Call the appropriate function to send this command to the Proxmark3 via USB.
+Wait for and retrieve the response from the Proxmark3.
+Send this response back to the web client (e.g., as text/plain or JSON).
+5.4 WebSockets for Real-Time Proxmark3 Output (Recommended)
+For a more interactive and "CLI-like" experience, especially for commands that produce continuous or lengthy output (like lf search or hw tune), WebSockets are highly recommended over simple HTTP request-response cycles.   
+
+Implementation: The ESPAsyncWebServer library supports an AsyncWebSocket plugin.
+Functionality:
+The ESP32 establishes a WebSocket server at a specific path (e.g., /ws).
+Client-side JavaScript connects to this WebSocket endpoint.
+When a Proxmark3 command is executed, the ESP32 can stream the output line-by-line (or in chunks) over the WebSocket to all connected clients.
+JavaScript on the client side listens for messages on the WebSocket and appends the received data to the output display area in real-time.
+This provides immediate feedback to the user as the Proxmark3 produces output.
+The design of a "minimalistic dark" UI is not merely an aesthetic choice; it directly impacts usability. By prioritizing clarity of information (Proxmark3 output) and straightforward command execution, the interface aims to reduce cognitive load for the user.
+
+Exposing Proxmark3 functionality over Wi-Fi, even on a local network, introduces potential security considerations. The Proxmark3 is a powerful tool capable of interacting with and sometimes manipulating RFID security mechanisms. If the Proxarch system is deployed on an unsecured Wi-Fi network, unauthorized individuals could potentially gain access to the Proxmark3's capabilities. Therefore, ensuring the Wi-Fi network itself is secured (e.g., using WPA2 or WPA3 encryption) is paramount.
+
+While the initial UI will support a few basic commands, thought should be given to its scalability. If more commands are added in the future, a simple linear list of buttons might become cumbersome. Designing the initial HTML and CSS with some flexibility can make it easier to adapt the UI later, perhaps by introducing tabs, dropdown menus for command categories, or even a direct command input field.
+
+6. Integrating Proxmark3 Basic Functions
+The initial version of Proxarch will focus on providing access to a core set of fundamental Proxmark3 commands.
+
+6.1 Identifying Core Proxmark3 Commands for Initial UI
+Based on common usage patterns and the goal of providing basic operational capability, the following commands have been selected for the initial implementation:
+
+hw version: Essential for verifying that the Proxmark3 is connected, recognized, and to check its firmware details.   
+hw tune: Crucial for checking the tuning of both LF and HF antennas, which is vital for reliable tag interaction.   
+lf search: Performs a search for known Low Frequency (125/134 kHz) tags. This command helps in identifying nearby LF tags.   
+hf search: Performs a search for known High Frequency (13.56 MHz) tags, such as ISO14443A, ISO14443B, ISO15693, and iClass types.   
+(Considered) data buffclear: While not a primary interaction command, clearing Proxmark3's internal data buffers might be useful between operations to ensure clean state. This can be added as an auxiliary function.   
+6.2 Mapping UI Elements to Proxmark3 Commands
+The web UI will feature distinct buttons, each corresponding to one of the selected Proxmark3 commands. When a user clicks a button:
+
+Client-side JavaScript will identify the associated command string (e.g., "hw version").
+An asynchronous request (HTTP GET or WebSocket message) containing this command string will be sent to the ESP32-S3.
+6.3 Handling Proxmark3 Mode Switching
+The Proxmark3 often operates in modes that are implicitly set by the command being executed, rather than through explicit, persistent "mode switch" commands. For instance, executing lf search inherently places the Proxmark3 in a state to perform LF operations.
+For this initial scope of "basic functions":   
+
+"Mode switching" will be implicit. Clicking an "LF Search" button means the Proxmark3 will operate in an LF context for that command.
+The UI could potentially provide a visual cue of the "last active mode" (e.g., highlighting an "LF Mode" or "HF Mode" indicator after a respective command is run), but there won't be separate UI elements to pre-select a mode before issuing a search command. More advanced mode handling (e.g., entering a specific sniffing or simulation mode that persists across multiple subsequent commands) is a potential future enhancement.
+6.4 Parsing and Displaying Command Output
+A key function of the ESP32 firmware is to capture and relay the Proxmark3's output to the web UI.
+
+The ESP32 will read the complete textual output generated by the Proxmark3 in response to a command.
+This text block will be sent to the web UI.
+The web UI will display this output in a designated area, typically a <pre> tag to preserve formatting or a <div> styled for monospaced text.
+The Proxmark3 command prompt (proxmark3>) is a critical delimiter that signals the end of a command's output and indicates the device is ready for a new command. The ESP32 firmware's reading logic must use this prompt (or a timeout) to determine when the entire response has been received.   
+Some Proxmark3 commands, like hw version, produce relatively short, quick responses. Others, such as hw tune or lf search, can take longer and produce more extensive output. The system architecture (especially if using WebSockets) should aim to provide feedback to the user as output is generated, rather than waiting for the entire command to complete before showing anything. This improves the perceived responsiveness of the interface. For commands that are known to take time, the UI might also display a "Processing..." indicator.
+
+Table 6.1: Implemented Proxmark3 Commands and UI Mapping
+UI Button Label	Proxmark3 Command String	Expected Behavior/Output Displayed on UI	Relevant References
+"Get Version"	hw version	Displays Proxmark3 firmware version, ARM serial, and other hardware info.	
+"Tune Antennas"	hw tune	Shows voltage readings for LF (125kHz, 134kHz) and HF (13.56MHz) antennas.	
+"LF Search"	lf search	Searches for known LF tags and displays any found tag UIDs and types.	
+"HF Search"	hf search	Searches for known HF tags and displays any found tag UIDs and types.	
+"Clear Buffer"	data buffclear	Clears internal Proxmark3 sample/data buffers. Confirmation message.	
+  
+7. The Complete "Proxarch" Arduino Sketch
+This section provides the complete Arduino sketch for the ESP32-S3, implementing the Proxarch system. The sketch includes Wi-Fi connectivity, USB host initialization for the Proxmark3 using the USBHostSerial library, an asynchronous web server with WebSockets for UI interaction, and handlers for basic Proxmark3 commands.
+
+C++
+
+// Proxarch: ESP32-S3 Web Interface for Proxmark3
+// Author:
+// Date:
+
+// -----------------------------------------------------------------------------
+// Includes and Global Variables
+// -----------------------------------------------------------------------------
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include "USBHostSerial.h" // From: https://github.com/bertmelis/USBHostSerial
+
+// WiFi Credentials - REPLACE WITH YOUR ACTUAL CREDENTIALS
+const char* ssid = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+// Web Server and WebSocket objects
+AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
+
+// USB Host Serial object for Proxmark3
+// Note: USBHostSerial relies on ESP-IDF components for USB Host CDC-ACM.
+// Ensure your ESP32 Arduino Core is recent (3.0.0+ for IDF 5.1+ features).
+// GPIO 19 (D-), GPIO 20 (D+) are typically used for native USB on ESP32-S3.
+USBHostSerial PM3Serial;
+
+// Buffer for Proxmark3 responses
+#define PM3_RESPONSE_BUFFER_SIZE 2048
+char pm3ResponseBuffer;
+volatile bool pm3CommandInProgress = false;
+String currentPm3Response = "";
+
+// Proxmark3 prompt
+const char* PM3_PROMPT = "proxmark3>";
+
+// -----------------------------------------------------------------------------
+// Web Page Content (HTML, CSS, JavaScript) - Minimalistic Dark Theme
+// -----------------------------------------------------------------------------
+const char index_html PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html>
+<head>
+  <title>Proxarch - ESP32 Proxmark3 Interface</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #1e1e1e; color: #d4d4d4; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    h1 { color: #569cd6; }
+   .container { background-color: #252526; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.5); width: 90%; max-width: 800px; }
+   .button-group { margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;}
+    button { background-color: #0e639c; color: white; border: none; padding: 10px 15px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; }
+    button:hover { background-color: #1177bb; }
+    button:active { background-color: #0c5586; }
+    #output { background-color: #1e1e1e; color: #d4d4d4; border: 1px solid #333; padding: 10px; height: 400px; overflow-y: scroll; white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; margin-top: 20px; border-radius: 4px; }
+   .status { margin-bottom:15px; font-size:0.9em; text-align:center; }
+    #pm3Status { font-weight: bold; }
+    #wifiStatus { font-weight: bold; }
+   .loader { border: 5px solid #f3f3f3; border-top: 5px solid #569cd6; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto; display: none; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <h1>Proxarch Interface</h1>
+  <div class="container">
+    <div class="status">
+      WiFi Status: <span id="wifiStatus">Connecting...</span> | Proxmark3 Status: <span id="pm3Status">Disconnected</span>
+    </div>
+    <div class="button-group">
+      <button onclick="sendCommand('hw version')">Get Version</button>
+      <button onclick="sendCommand('hw tune')">Tune Antennas</button>
+      <button onclick="sendCommand('lf search')">LF Search</button>
+      <button onclick="sendCommand('hf search')">HF Search</button>
+      <button onclick="sendCommand('data buffclear')">Clear Buffer</button>
+    </div>
+    <div id="loader" class="loader"></div>
+    <h3>Proxmark3 Output:</h3>
+    <div id="output">Waiting for commands...</div>
+  </div>
+
+  <script>
+    var gateway = `ws://${window.location.hostname}/ws`;
+    var websocket;
+    var outputDiv = document.getElementById('output');
+    var loaderDiv = document.getElementById('loader');
+    var pm3StatusSpan = document.getElementById('pm3Status');
+    var wifiStatusSpan = document.getElementById('wifiStatus');
+
+    window.addEventListener('load', onLoad);
+
+    function onLoad(event) {
+      initWebSocket();
+      updateWifiStatus(true); // Assume connected if page loads
+    }
+
+    function initWebSocket() {
+      console.log('Trying to open a WebSocket connection...');
+      websocket = new WebSocket(gateway);
+      websocket.onopen = onOpen;
+      websocket.onclose = onClose;
+      websocket.onmessage = onMessage;
+    }
+
+    function onOpen(event) {
+      console.log('Connection opened');
+      websocket.send("Client connected");
+      pm3StatusSpan.textContent = "Attempting Link...";
+      pm3StatusSpan.style.color = "#ffd700"; // Yellow
+    }
+
+    function onClose(event) {
+      console.log('Connection closed');
+      pm3StatusSpan.textContent = "Disconnected (WS)";
+      pm3StatusSpan.style.color = "#ff6347"; // Red
+      setTimeout(initWebSocket, 2000); // Try to reconnect
+    }
+
+    function onMessage(event) {
+      console.log(event.data);
+      var data = JSON.parse(event.data);
+
+      if(data.type === 'status') {
+        if(data.pm3Connected) {
+            pm3StatusSpan.textContent = "Connected";
+            pm3StatusSpan.style.color = "#32cd32"; // Green
+        } else {
+            pm3StatusSpan.textContent = "Disconnected";
+            pm3StatusSpan.style.color = "#ff6347"; // Red
+        }
+      } else if (data.type === 'response_start') {
+        outputDiv.innerHTML = ''; // Clear previous output
+        loaderDiv.style.display = 'block';
+      } else if (data.type === 'response_chunk') {
+        outputDiv.innerHTML += data.chunk;
+        outputDiv.scrollTop = outputDiv.scrollHeight; // Auto-scroll
+      } else if (data.type === 'response_end') {
+        loaderDiv.style.display = 'none';
+        if (data.final_response) {
+             // The final_response might already be part of chunks,
+             // but if it's sent separately ensure it's appended.
+             // outputDiv.innerHTML += data.final_response;
+        }
+        outputDiv.scrollTop = outputDiv.scrollHeight;
+      } else if (data.type === 'error') {
+        outputDiv.innerHTML += `<span style="color: #ff6347;">ERROR: ${data.message}</span>\n`;
+        loaderDiv.style.display = 'none';
+      }
+    }
+
+    function sendCommand(command) {
+      if (websocket.readyState === WebSocket.OPEN) {
+        outputDiv.innerHTML = ''; // Clear previous output on new command
+        loaderDiv.style.display = 'block';
+        console.log("Sending command: " + command);
+        websocket.send(JSON.stringify({type: "command", cmd: command}));
+      } else {
+        console.log("WebSocket is not open. Cannot send command.");
+        outputDiv.innerHTML = "WebSocket connection is closed. Please wait or refresh.";
+      }
+    }
+
+    function updateWifiStatus(connected) {
+        if(connected) {
+            wifiStatusSpan.textContent = `Connected (${window.location.hostname})`;
+            wifiStatusSpan.style.color = "#32cd32"; // Green
+        } else {
+            wifiStatusSpan.textContent = "Disconnected";
+            wifiStatusSpan.style.color = "#ff6347"; // Red
+        }
+    }
+  </script>
+</body>
+</html>
+)rawliteral";
+
+// -----------------------------------------------------------------------------
+// WebSocket Event Handler
+// -----------------------------------------------------------------------------
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
+             void *arg, uint8_t *data, size_t len) {
+  switch (type) {
+    case WS_EVT_CONNECT:
+      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      // Send initial PM3 connection status
+      {
+        String statusMsg = "{\"type\":\"status\", \"pm3Connected\":" + String(PM3Serial.connected()? "true" : "false") + "}";
+        client->text(statusMsg);
+      }
+      break;
+    case WS_EVT_DISCONNECT:
+      Serial.printf("WebSocket client #%u disconnected\n", client->id());
+      break;
+    case WS_EVT_DATA:
+      {
+        AwsFrameInfo *info = (AwsFrameInfo*)arg;
+        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+          data[len] = 0; // Null-terminate
+          String message = (char*)data;
+          Serial.printf("Received WS message: %s\n", message.c_str());
+
+          // Basic JSON parsing for command
+          // Expects: {"type":"command", "cmd":"hw version"}
+          if (message.startsWith("{\"type\":\"command\"")) {
+            int cmd_start = message.indexOf("\"cmd\":\"") + 7;
+            int cmd_end = message.indexOf("\"", cmd_start);
+            if (cmd_start > 6 && cmd_end > cmd_start) {
+              String command = message.substring(cmd_start, cmd_end);
+              Serial.printf("Parsed command: %s\n", command.c_str());
+              
+              if (!pm3CommandInProgress) {
+                pm3CommandInProgress = true;
+                currentPm3Response = ""; // Clear previous full response
+
+                // Notify client that command processing started
+                String startMsg = "{\"type\":\"response_start\"}";
+                ws.textAll(startMsg);
+
+                sendProxmarkCommand(command); 
+                // Response will be streamed in loop() or a task
+              } else {
+                String errorMsg = "{\"type\":\"error\", \"message\":\"Proxmark3 command already in progress.\"}";
+                client->text(errorMsg);
+              }
+            }
+          } else if (message == "Client connected") {
+            // Acknowledge client connection, maybe send welcome or current status
+             String statusMsg = "{\"type\":\"status\", \"pm3Connected\":" + String(PM3Serial.connected()? "true" : "false") + "}";
+             client->text(statusMsg);
+          }
+        }
+      }
+      break;
+    case WS_EVT_PONG:
+    case WS_EVT_ERROR:
+      break;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Proxmark3 Communication Functions
+// -----------------------------------------------------------------------------
+void sendProxmarkCommand(const String& command) {
+  if (PM3Serial.connected()) {
+    Serial.printf("Sending to PM3: %s\n", command.c_str());
+    PM3Serial.println(command); // Send command with newline
+  } else {
+    Serial.println("Error: Proxmark3 not connected.");
+    String errorMsg = "{\"type\":\"error\", \"message\":\"Proxmark3 not connected.\"}";
+    ws.textAll(errorMsg);
+    pm3CommandInProgress = false; // Reset flag
+  }
+}
+
+void processProxmarkOutput() {
+  static String lineBuffer = "";
+  static unsigned long lastDataTime = 0;
+  const unsigned long commandTimeout = 10000; // 10 seconds timeout for a command
+
+  if (!PM3Serial.connected() && pm3CommandInProgress) {
+      Serial.println("PM3 disconnected during command execution.");
+      String errorMsg = "{\"type\":\"error\", \"message\":\"Proxmark3 disconnected during command.\"}";
+      ws.textAll(errorMsg);
+      String endMsg = "{\"type\":\"response_end\", \"final_response\":\"" + currentPm3Response + "\"}";
+      ws.textAll(endMsg);
+      pm3CommandInProgress = false;
+      currentPm3Response = "";
+      lineBuffer = "";
+      return;
+  }
+
+  if (pm3CommandInProgress && millis() - lastDataTime > commandTimeout) {
+      Serial.println("PM3 command timeout.");
+      currentPm3Response += "\n";
+      String errorMsg = "{\"type\":\"error\", \"message\":\"Command timed out waiting for Proxmark3 prompt.\"}";
+      ws.textAll(errorMsg);
+      String endMsg = "{\"type\":\"response_end\", \"final_response\":\"" + escapeJsonString(currentPm3Response) + "\"}";
+      ws.textAll(endMsg);
+      pm3CommandInProgress = false;
+      currentPm3Response = "";
+      lineBuffer = "";
+      return;
+  }
+  
+  while (PM3Serial.available()) {
+    char c = PM3Serial.read();
+    Serial.write(c); // Echo to serial monitor for debugging
+    
+    currentPm3Response += c;
+    lineBuffer +=c;
+    lastDataTime = millis(); // Reset timeout counter
+
+    // Stream chunks of data if response gets large or on newline
+    if (currentPm3Response.length() > 256 |
+| c == '\n') {
+        if (currentPm3Response.length() > 0) {
+            String chunkMsg = "{\"type\":\"response_chunk\", \"chunk\":\"" + escapeJsonString(currentPm3Response) + "\"}";
+            ws.textAll(chunkMsg);
+            currentPm3Response = ""; // Reset chunk
+        }
+    }
+
+    // Check for Proxmark3 prompt to signify end of command output
+    // The lineBuffer helps detect the prompt potentially split across reads
+    if (lineBuffer.endsWith(PM3_PROMPT)) {
+      Serial.println("\nProxmark3 prompt detected. Command finished.");
+      
+      // Send any remaining data in currentPm3Response as a final chunk
+      if (currentPm3Response.length() > 0) {
+          String chunkMsg = "{\"type\":\"response_chunk\", \"chunk\":\"" + escapeJsonString(currentPm3Response) + "\"}";
+          ws.textAll(chunkMsg);
+      }
+      
+      // Extract the full response (which was accumulated in lineBuffer before being cleared in chunks)
+      // For simplicity, we'll use the lineBuffer content up to the prompt.
+      // A more robust way would be to accumulate the entire response in a separate string if needed for full context.
+      String finalResponsePortion = lineBuffer.substring(0, lineBuffer.length() - strlen(PM3_PROMPT));
+
+      String endMsg = "{\"type\":\"response_end\", \"final_response\":\"" + escapeJsonString(finalResponsePortion) + "\"}";
+      ws.textAll(endMsg);
+      
+      pm3CommandInProgress = false;
+      currentPm3Response = ""; // Clear for next command
+      lineBuffer = ""; // Clear line buffer
+      break; 
+    }
+    // Keep lineBuffer from growing too large if no prompt is found quickly
+    if (lineBuffer.length() > PM3_RESPONSE_BUFFER_SIZE / 2) {
+        lineBuffer = lineBuffer.substring(lineBuffer.length() - 128); // Keep last 128 chars
+    }
+  }
+}
+
+String escapeJsonString(const String& str) {
+  String escapedStr = "";
+  for (char c : str) {
+    switch (c) {
+      case '"':  escapedStr += "\\\""; break;
+      case '\\': escapedStr += "\\\\"; break;
+      case '\b': escapedStr += "\\b";  break;
+      case '\f': escapedStr += "\\f";  break;
+      case '\n': escapedStr += "\\n";  break;
+      case '\r': escapedStr += "\\r";  break;
+      case '\t': escapedStr += "\\t";  break;
+      default:
+        if (c >= 0 && c < 32) {
+          // Control characters not handled above, skip or replace with space/unicode
+          // For simplicity, skipping them here.
+        } else {
+          escapedStr += c;
+        }
+        break;
+    }
+  }
+  return escapedStr;
+}
+
+
+// -----------------------------------------------------------------------------
+// WiFi and Web Server Setup
+// -----------------------------------------------------------------------------
+void setupWiFi() {
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  int attempts = 0;
+  while (WiFi.status()!= WL_CONNECTED && attempts < 20) { // Try for 10 seconds
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi connected.");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\nFailed to connect to WiFi. Please check credentials or network.");
+    // Optionally, start AP mode here as a fallback
+  }
+}
+
+void setupWebServer() {
+  // Initialize WebSocket
+  ws.onEvent(onEvent);
+  server.addHandler(&ws);
+
+  // Serve the main HTML page
+  server.on("/", HTTP_GET,(AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html);
+  });
+
+  // Handle Not Found
+  server.onNotFound((AsyncWebServerRequest *request){
+    request->send(404, "text/plain", "Not found");
+  });
+
+  server.begin();
+  Serial.println("HTTP server started.");
+}
+
+// -----------------------------------------------------------------------------
+// USB Host Setup (Proxmark3)
+// -----------------------------------------------------------------------------
+// Callback for USB Host events (device connection/disconnection)
+class USBHostEvents : public USBHostEventHandler {
+  void onDeviceConnecting(uint8_t device_address) override {
+    Serial.printf("PM3 USB Device connecting: address %u\n", device_address);
+  }
+
+  void onDeviceConnected(uint8_t device_address, USBDeviceConnected* dev) override {
+    Serial.printf("PM3 USB Device connected: address %u, VID:0x%04X, PID:0x%04X\n",
+                  device_address, dev->idVendor(), dev->idProduct());
+    // Proxmark3 VID/PID is often 0x2d2d / 0x706d or similar.
+    // The USBHostSerial library should handle CDC-ACM class matching.
+    String statusMsg = "{\"type\":\"status\", \"pm3Connected\":true}";
+    ws.textAll(statusMsg); // Notify web clients
+  }
+
+  void onDeviceDisconnected(uint8_t device_address) override {
+    Serial.printf("PM3 USB Device disconnected: address %u\n", device_address);
+    String statusMsg = "{\"type\":\"status\", \"pm3Connected\":false}";
+    ws.textAll(statusMsg); // Notify web clients
+    if (pm3CommandInProgress) {
+        Serial.println("PM3 disconnected during command execution.");
+        String errorMsg = "{\"type\":\"error\", \"message\":\"Proxmark3 disconnected unexpectedly.\"}";
+        ws.textAll(errorMsg);
+        String endMsg = "{\"type\":\"response_end\", \"final_response\":\"" + escapeJsonString(currentPm3Response) + "\"}";
+        ws.textAll(endMsg);
+        pm3CommandInProgress = false;
+        currentPm3Response = "";
+    }
+  }
+};
+
+void setupUSBHost() {
+  Serial.println("Initializing USB Host for Proxmark3...");
+  // The USBHostSerial library uses GPIO 19 (D-) and 20 (D+) by default for ESP32-S3 native USB.
+  // Ensure your ESP32-S3 board has these pins connected to the correct USB port.
+  // In Arduino IDE: Tools > USB Mode > "USB-OTG (TinyUSB)"
+  //                 Tools > USB CDC On Boot > "Enabled" (for Serial output over native USB if desired)
+  
+  USBHostSerialConfig config; // Use default config
+  // If you know Proxmark3's VID/PID, you can specify it:
+  // config.vid = 0x2D2D; // Example VID
+  // config.pid = 0x706D; // Example PID
+  
+  PM3Serial.setEventHandler(new USBHostEvents()); // Attach event handler
+
+  if (PM3Serial.begin(config)) {
+    Serial.println("USB Host Serial initialized successfully.");
+  } else {
+    Serial.println("Failed to initialize USB Host Serial.");
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Main Setup and Loop
+// -----------------------------------------------------------------------------
+void setup() {
+  Serial.begin(115200);
+  while (!Serial && millis() < 2000); // Wait for serial console
+  Serial.println("\nProxarch ESP32-S3 Initializing...");
+
+  setupWiFi();
+  setupUSBHost(); // Initialize USB Host for Proxmark3
+  setupWebServer();
+
+  Serial.println("Setup complete. Proxarch is running.");
+  Serial.println("Access the interface at: http://" + WiFi.localIP().toString());
+}
+
+void loop() {
+  // USBHostSerial needs to be called periodically to handle USB events
+  PM3Serial.task(); 
+
+  // Process any incoming data from Proxmark3 if a command is in progress
+  if (pm3CommandInProgress && PM3Serial.connected()) {
+    processProxmarkOutput();
+  }
+  
+  // Clean up disconnected WebSocket clients
+  ws.cleanupClients();
+
+  // Small delay to prevent busy-looping if no other tasks
+  delay(10); 
+}
+
+Detailed Explanations of Major Code Sections
+Includes and Global Variables:
+
+Standard libraries for Wi-Fi (WiFi.h), asynchronous TCP (AsyncTCP.h), and asynchronous web server (ESPAsyncWebServer.h) are included.
+USBHostSerial.h is the core library for USB host communication with the Proxmark3.
+Wi-Fi credentials (ssid, password) must be configured by the user.
+AsyncWebServer server(80) and AsyncWebSocket ws("/ws") create instances for the web and WebSocket servers.
+USBHostSerial PM3Serial instantiates the object to interact with the Proxmark3.
+pm3ResponseBuffer and associated flags/strings manage the data received from the Proxmark3.
+PM3_PROMPT defines the string (proxmark3>) that indicates the end of a Proxmark3 command output.
+Web Page Content (index_html):
+
+This PROGMEM C++ raw string literal contains the complete HTML, CSS, and JavaScript for the web UI.
+HTML: Sets up the page structure with a title, status display area, command buttons, and an output area (<div id="output">). A simple loader animation is included.
+CSS: Styles the page for a minimalistic dark theme, ensuring readability and a clean layout.
+JavaScript:
+Establishes a WebSocket connection to /ws on the ESP32.
+Handles WebSocket events (onOpen, onClose, onMessage).
+onMessage: Parses JSON messages from the server. It updates the Proxmark3 connection status, displays chunks of Proxmark3 responses in the output div, and shows error messages. It also controls the loader visibility.
+sendCommand(command): Sends a command to the ESP32 via WebSocket when a button is clicked. The command is wrapped in a JSON object.
+updateWifiStatus: Updates the Wi-Fi status on the page.
+WebSocket Event Handler (onEvent):
+
+Manages WebSocket client connections, disconnections, and incoming data.
+When a client connects (WS_EVT_CONNECT), it logs the event and sends the current Proxmark3 connection status.
+When data is received (WS_EVT_DATA), it parses the JSON message. If it's a {"type":"command", "cmd":"..."} message, it extracts the command string and calls sendProxmarkCommand(), ensuring only one command is processed at a time.
+Proxmark3 Communication Functions:
+
+sendProxmarkCommand(command): If the Proxmark3 is connected (PM3Serial.connected()), it sends the command string followed by a newline using PM3Serial.println(). If not connected, it sends an error message back via WebSocket.
+processProxmarkOutput(): This function is called repeatedly in the loop() to read data from PM3Serial.
+It accumulates incoming characters into currentPm3Response (for chunking) and lineBuffer (for prompt detection).
+It sends data chunks via WebSocket to the UI for real-time display.
+It checks if lineBuffer ends with the PM3_PROMPT. If so, it signals the end of the command, sends any remaining data, and resets the pm3CommandInProgress flag.
+Includes a timeout mechanism to prevent indefinite waiting if the prompt is not received.
+escapeJsonString(str): A utility function to escape special characters in strings before embedding them in JSON payloads to be sent over WebSockets. This prevents malformed JSON.
+Wi-Fi and Web Server Setup:
+
+setupWiFi(): Connects the ESP32-S3 to the configured Wi-Fi network and prints the IP address to the Serial Monitor.
+setupWebServer(): Initializes the WebSocket server, sets up the handler for the root URL (/) to serve index_html, defines a 404 handler, and starts the server.
+USB Host Setup (setupUSBHost):
+
+Initializes the PM3Serial object (instance of USBHostSerial).
+An instance of USBHostEvents is created and registered with PM3Serial.setEventHandler(). This class overrides callbacks for device connection/disconnection events, logging them to Serial and updating web clients via WebSocket.
+PM3Serial.begin(config) attempts to start the USB host stack. The default configuration should work for generic CDC-ACM devices like the Proxmark3.
+Comments highlight the importance of selecting "USB-OTG (TinyUSB)" mode in the Arduino IDE for the ESP32-S3.
+Main setup() and loop():
+
+setup(): Initializes Serial communication, calls the setup functions for Wi-Fi, USB Host, and the Web Server.
+loop():
+Calls PM3Serial.task(): This is crucial. The USBHostSerial library (and underlying TinyUSB/ESP-IDF stack) requires its task/event handler to be called regularly to process USB events, manage connections, and handle data transfers.
+Calls processProxmarkOutput() if a command is in progress and the Proxmark3 is connected.
+Calls ws.cleanupClients() to manage WebSocket connections.
+A small delay(10) is added to yield processing time and prevent the loop from consuming 100% CPU if other tasks are minimal.
+Pin/Connection Documentation Embedded in Comments
+Comments within setupUSBHost() and near the USBHostSerial PM3Serial; declaration implicitly refer to the standard ESP32-S3 native USB pins (GPIO19 D-, GPIO20 D+). The sketch relies on the USBHostSerial library and the ESP32 Arduino core to correctly configure these pins when USB OTG mode is enabled.
+
+Code Formatting and Best Practices
+The code is structured with clear sections for different functionalities.
+Variable and function names are chosen to be descriptive.
+Serial debug messages (Serial.print, Serial.printf) are used throughout for troubleshooting.
+Error handling is included for Wi-Fi connection, Proxmark3 connection, and command execution.
+WebSockets are used for responsive, real-time communication with the web UI.
+The pm3CommandInProgress flag ensures that only one Proxmark3 command is processed at a time, preventing overlapping requests.
+JSON is used for structured communication over WebSockets between the ESP32 and the web client.
+The use of PROGMEM for index_html conserves RAM, which is important on microcontrollers.   
+This sketch provides a solid foundation for the Proxarch system. The structure encourages maintainability and extensibility. For instance, adding new Proxmark3 commands would primarily involve adding a new button to the HTML and ensuring the sendProxmarkCommand and processProxmarkOutput functions can handle its specific output characteristics if they differ significantly from existing commands.
+
+8. Required Arduino Libraries
+To successfully compile and run the "Proxarch" Arduino sketch, several libraries are necessary. These libraries provide functionalities for Wi-Fi communication, asynchronous web serving, WebSocket communication, and USB host capabilities.
+
+Table 8.1: Required Arduino Libraries
+Library Name	Recommended Version (or "Latest")	Purpose	Source/Installation Method
+WiFi.h (ESP32 Core)	N/A (Bundled with Core)	ESP32 Wi-Fi connectivity (station mode).	Comes bundled with the ESP32 Arduino Core. No separate installation needed.
+AsyncTCP	Latest (e.g., v1.1.1 or newer)	Asynchronous TCP library, a dependency for ESPAsyncWebServer.	Arduino Library Manager (search for "AsyncTCP" by dvarrel or me-no-dev). Also available on GitHub.
+ESPAsyncWebServer	Latest	For creating the asynchronous web server and WebSocket server on ESP32.	Arduino Library Manager (search for "ESPAsyncWebServer" by ESP32Async). Also available on GitHub.
+USBHostSerial (by bertmelis)	Latest from GitHub	Provides an Arduino Serial-like interface for USB CDC devices in host mode.	Download as a ZIP from(https://github.com/bertmelis/USBHostSerial). Install via Arduino IDE: Sketch > Include Library > Add.ZIP Library....
+ESP-IDF USB Host & TinyUSB Components	(Handled by Core/USBHostSerial)	Underlying drivers for USB host functionality.	These are typically components of the ESP-IDF, which the ESP32 Arduino Core is built upon. USBHostSerial aims to interface with these. Ensure your ESP32 Arduino Core is up-to-date (v3.0.0+ recommended for better TinyUSB support). Issues here might require deeper ESP-IDF configuration or PlatformIO.
+  
+Notes on Library Versions and Dependencies:
+
+ESP32 Arduino Core: The version of the ESP32 Arduino Core itself is critical. It is highly recommended to use a recent version (e.g., 3.0.0 or newer), as these are based on more recent versions of the ESP-IDF (e.g., ESP-IDF 5.1+) which include more mature support for USB OTG and TinyUSB. This can significantly affect the stability and functionality of the USB host features.   
+USBHostSerial Dependencies: The USBHostSerial library relies on several ESP-IDF components related to the USB host stack and TinyUSB. In an ideal Arduino IDE setup, these dependencies should be correctly resolved by the ESP32 Arduino Core. However, due to the evolving nature of these components and the abstraction layer, users might encounter compilation or runtime issues if there are mismatches or if the Arduino environment doesn't fully expose the necessary underlying ESP-IDF configurations. The library author's GitHub repository and its "Issues" section may provide guidance if such problems arise. Using PlatformIO as an alternative development environment can offer more explicit control over ESP-IDF component versions and configurations.   
+Installation Order: Generally, the order of installation does not matter, but it's good practice to install dependencies like AsyncTCP before ESPAsyncWebServer.
+Careful management of these libraries and the ESP32 Arduino Core version is essential for a smooth development experience. Version conflicts or missing dependencies are common sources of frustration, and the USB host functionality, being a more advanced feature, can be particularly sensitive to the development environment setup.
+
+9. Compilation, Upload, and Usage Guide
+This section provides instructions for setting up the Arduino IDE, compiling and uploading the "Proxarch" sketch to an ESP32-S3, and accessing the web interface.
+
+9.1 Setting up the Arduino IDE for ESP32-S3
+Install ESP32 Board Support:
+If not already installed, open Arduino IDE.
+Go to File > Preferences (or Arduino IDE > Settings... on macOS).
+In the "Additional Board Manager URLs" field, add the official Espressif ESP32 boards URL: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+Click "OK".
+Go to Tools > Board > Boards Manager....
+Search for "esp32" and install the "esp32 by Espressif Systems" package. Choose a recent version (e.g., 2.0.5 or ideally 3.0.0+ for better USB support).
+Select ESP32-S3 Board and Settings:
+Go to Tools > Board and select your specific ESP32-S3 development board (e.g., "ESP32S3 Dev Module").
+Crucial USB Settings for ESP32-S3 (these menu options might vary slightly based on core version):
+Tools > USB Mode: Set to USB-OTG (TinyUSB). This enables the native USB peripheral for OTG/Host functionality.   
+Tools > USB CDC On Boot: Set to Enabled. This allows the native USB port to also be used for Serial Monitor output after flashing, which is very useful for debugging.   
+Tools > Upload Mode: Often, UART0 / Hardware CDC is a good choice when using native USB for both upload and CDC. If you encounter issues, Internal USB or USB-DFU might be alternatives, but UART0 / Hardware CDC usually provides a smoother development experience after the initial setup.   
+Tools > Port: Select the COM port corresponding to your ESP32-S3. When USB CDC is enabled, this will be the native USB port.
+Tools > Partition Scheme: The default partition scheme should generally be sufficient for this sketch, as the web content is embedded. If you later plan to use SPIFFS/LittleFS for larger web assets, you might need to choose a scheme with a larger file system partition.
+Install Required Libraries: Install all libraries listed in Table 8.1 using the Arduino Library Manager or by adding them as.ZIP libraries from GitHub, as appropriate.
+9.2 Compiling and Uploading the Sketch
+Open the Sketch: Open the Proxarch.ino sketch file in the Arduino IDE.
+Modify Wi-Fi Credentials: Update the ssid and password variables in the sketch with your Wi-Fi network details.
+Compile: Click the "Verify" button (checkmark icon) to compile the sketch. Address any compilation errors, which are often due to missing libraries or incorrect board settings.
+Upload:
+Connect your ESP32-S3 board to your computer via its native USB port (the one configured for OTG).
+First-Time Upload (if needed): For some ESP32-S3 boards or configurations, the very first upload over native USB might require manually putting the board into Download Mode. To do this: press and hold the "BOOT" button, then press and release the "RESET" button, then release the "BOOT" button.   
+Click the "Upload" button (right arrow icon).
+After a successful upload, the ESP32-S3 should restart. If you had to manually enter download mode, you might need to press the "RESET" button once after uploading for the new sketch to run. With "USB CDC On Boot" enabled, subsequent uploads should typically not require manual intervention for download mode.
+9.3 Accessing and Using the "Proxarch" Web Interface
+Hardware Connection: Connect the Proxmark3 to the ESP32-S3's native USB port using the USB-C to micro-USB cable.
+Power On: Ensure the ESP32-S3 is powered on.
+Check Serial Monitor: Open the Arduino IDE's Serial Monitor (Tools > Serial Monitor). Set the baud rate to 115200 (or as defined in Serial.begin() in the sketch).
+You should see debug messages from the ESP32-S3, including it attempting to connect to Wi-Fi.
+Once connected to Wi-Fi, the ESP32-S3 will print its IP address. Note this IP address.
+You should also see messages related to USB Host initialization and Proxmark3 connection status.
+Access Web UI:
+Open a web browser (e.g., Chrome, Firefox) on a computer, smartphone, or tablet that is connected to the same Wi-Fi network as the ESP32-S3.
+In the browser's address bar, type http://<ESP32_IP_ADDRESS> (replacing <ESP32_IP_ADDRESS> with the actual IP address obtained from the Serial Monitor).
+Interact with Proxarch:
+The Proxarch web interface should load.
+The "WiFi Status" should indicate "Connected."
+The "Proxmark3 Status" should update based on whether the ESP32-S3 has successfully connected to the Proxmark3 via USB.
+Click the command buttons (e.g., "Get Version," "Tune Antennas") to send commands to the Proxmark3.
+Observe the output from the Proxmark3 appearing in the "Proxmark3 Output" area on the web page. The loader animation should appear while a command is being processed.
+The Serial Monitor is an invaluable tool for debugging. It will display Wi-Fi connection progress, USB host events, commands being sent, raw responses received from the Proxmark3 (if echoed in the firmware), and any error messages generated by the ESP32-S3 sketch. This output is crucial for diagnosing issues with Wi-Fi, USB connectivity, or Proxmark3 command handling.
+
+10. Troubleshooting and Future Enhancements
+This section outlines common issues that might be encountered when setting up and using the Proxarch system, along with potential solutions and suggestions for future development.
+
+10.1 Common Issues and Solutions
+Proxmark3 Not Detected by ESP32-S3:
+
+Check USB Cable: Ensure you are using a data-capable USB-C to micro-USB cable. Charge-only cables will not work. Try a different cable if unsure.
+Correct ESP32-S3 USB Port: Verify the Proxmark3 is connected to the ESP32-S3's native USB port (typically associated with GPIO19/20), not a UART-only USB port.
+USBHostSerial Initialization: Check Serial Monitor for messages from setupUSBHost(). Ensure "USB-OTG (TinyUSB)" mode is selected in Arduino IDE tools.
+Proxmark3 Power: The Proxmark3 is powered by the ESP32-S3 via VBUS. Ensure the ESP32-S3 has an adequate power supply.
+Proxmark3 Itself: Connect the Proxmark3 directly to a PC to ensure it's functioning correctly and recognized by the standard Proxmark3 client software.
+Library/Core Issues: Compatibility issues between USBHostSerial, its dependencies, and the ESP32 Arduino Core version can prevent device detection. Ensure all are up-to-date or try known compatible versions if documented.
+Wi-Fi Connection Fails:
+
+Credentials: Double-check the ssid and password in the Arduino sketch. They are case-sensitive.
+Wi-Fi Signal Strength: Ensure the ESP32-S3 is within range of your Wi-Fi access point.
+Network Configuration: Some complex network configurations (e.g., captive portals, MAC filtering) might prevent connection. Test with a simpler network if possible.
+Serial Monitor: Observe Wi-Fi connection attempts and error messages in the Serial Monitor.
+Web UI Not Loading or Unresponsive:
+
+Correct IP Address: Verify you are using the correct IP address of the ESP32-S3 in the web browser.
+ESP32 Web Server Running: Check Serial Monitor for confirmation that the web server started successfully.
+Network Connectivity: Ensure your client device (PC, phone) is on the same Wi-Fi network as the ESP32-S3. Firewalls on the client device could also block access.
+JavaScript Errors: Open the browser's developer console (usually F12) to check for JavaScript errors that might be preventing the UI from functioning.
+Proxmark3 Commands Fail, Timeout, or Give Unexpected Output:
+
+Proxmark3 Responsiveness: Confirm the Proxmark3 is working correctly with its standard PC client.
+Command Syntax: Ensure the command strings sent from the web UI (and processed by the ESP32) are correct for the Proxmark3.
+ESP32 Parsing Logic: The firmware's logic for reading responses and detecting the proxmark3> prompt might need adjustment if the Proxmark3's output format is slightly different than expected.
+Proxmark3 Firmware Version: The behavior of some commands or their output format can vary between Proxmark3 firmware versions (e.g., official vs. RRG/Iceman builds). The sketch assumes a reasonably standard and recent firmware. Mismatches between the Proxmark3's firmware and the expectations of a client (in this case, the ESP32 sketch) can lead to errors or timeouts.   
+Command Timeout Value: The commandTimeout in processProxmarkOutput() might be too short for certain long-running Proxmark3 commands.
+Buffer Overflow: If Proxmark3 responses are very large, the pm3ResponseBuffer might overflow.
+Library Compilation Errors:
+
+Missing Libraries: Ensure all libraries listed in Table 8.1 are correctly installed in your Arduino IDE.
+Incorrect Board Settings: Verify that the correct ESP32-S3 board and USB configuration options are selected in the Tools menu.
+Library Version Conflicts: Sometimes, different libraries may have conflicting dependencies. Try using recommended versions or the latest stable releases.
+USBHostSerial Dependencies: As noted, issues with the ESP-IDF components that USBHostSerial relies on can cause compilation problems, especially in the standard Arduino IDE. Using PlatformIO or ensuring a very recent ESP32 Arduino Core might alleviate these.   
+The complexity of USB host functionality, combined with multiple interdependent libraries and varying development environments, means that troubleshooting can sometimes be challenging. Providing detailed error messages, Arduino IDE version, ESP32 Core version, and versions of relevant libraries is crucial if seeking assistance from online communities.
+
+10.2 Suggestions for Future Enhancements
+The current Proxarch system provides a foundational web interface. Numerous enhancements could be made:
+
+Expanded Proxmark3 Command Support:
+Add UI elements for more LF and HF commands (e.g., specific tag reading/writing, simulation, sniffing).
+Implement support for commands that require arguments (e.g., hf mf rdbl <block_number> <key_type> <key>). This would require input fields in the UI and more complex command string construction on the ESP32.
+Data Management:
+Allow saving Proxmark3 data traces (e.g., sniffed data, tag dumps) from the web UI to the client device.
+Enable uploading data files (e.g., tag dumps for simulation/cloning) from the client device to the ESP32, which then uses them with the Proxmark3.
+Improved User Interface:
+Implement a tabbed interface or categorized menus for better organization as more commands are added.
+Add a command history feature.
+Incorporate graphical display for data like hw tune results.
+Allow users to enter arbitrary Proxmark3 commands via a text input field.
+Security:
+Implement user authentication (e.g., username/password) for accessing the Proxarch web interface, especially if the ESP32 is on a less trusted network.
+Proxmark3 Firmware Management (Advanced):
+Explore the possibility of uploading firmware updates to the Proxmark3 via the web interface (this would be a complex undertaking, requiring the ESP32 to manage the Proxmark3's bootloader and flashing process).
+Offline Data Logging:
+Allow the ESP32 to log Proxmark3 activity or collected data to its internal flash memory (SPIFFS/LittleFS) or an attached SD card, even when no web client is connected.
+Configuration Persistence:
+Save Wi-Fi credentials or other settings to the ESP32's non-volatile memory so they don't need to be hardcoded or re-entered.
+The Proxmark3 itself is a device with evolving firmware. Ensuring ongoing compatibility of the Proxarch system with common Proxmark3 firmware branches (like the RRG/Iceman fork) would be beneficial for users who keep their Proxmark3 updated.
+
+11. Conclusion
+11.1 Summary of the "Proxarch" Solution
+The "Proxarch" project successfully demonstrates the creation of a web-based interface for controlling a Proxmark3 RFID tool using an ESP32-S3 microcontroller. By leveraging the ESP32-S3's native USB host capabilities and its Wi-Fi connectivity, Proxarch provides a convenient and portable alternative to traditional PC-based Proxmark3 client software for executing basic commands. The system comprises an Arduino sketch running on the ESP32-S3, which manages USB communication with the Proxmark3 and hosts an asynchronous web server delivering a minimalistic, dark-themed user interface accessible from any web browser on the local network.
+
+11.2 Recap of Key Features
+ESP32-S3 as USB Host: The ESP32-S3 directly interfaces with the Proxmark3 via USB, acting as the host controller.
+Web-Based UI: A responsive web interface, built with HTML, CSS, and JavaScript, and served by ESPAsyncWebServer, allows users to trigger Proxmark3 commands.
+WebSocket Communication: Real-time streaming of Proxmark3 output to the web UI is achieved using WebSockets, enhancing user experience.
+Basic Proxmark3 Functionality: Initial support includes essential commands such as hw version, hw tune, lf search, hf search, and data buffclear.
+Minimalistic Dark Theme: The UI is designed for clarity and ease of use, with a dark aesthetic.
+Portability and Accessibility: The system allows Proxmark3 operation without a dedicated PC, using common devices like smartphones or tablets for control.
+11.3 Final Thoughts on Potential and Usability
+The Proxarch system offers significant improvements in the usability and accessibility of the Proxmark3 for common tasks. Its portability makes it particularly useful for fieldwork or situations where a full computer setup is inconvenient. The web interface, while initially basic, provides a user-friendly way to interact with the device.
+
+Beyond its immediate application with the Proxmark3, the architectural pattern and software components developed for Proxarch serve as a valuable template. The core logic for USB host serial communication and the asynchronous web server on the ESP32-S3 can be adapted to interface with a wide array of other USB serial devices, such as GPS modules, thermal printers, or various industrial sensors. This adaptability empowers users to create custom web-based control and monitoring solutions for diverse hardware with relative ease.
+
+The project, by utilizing and building upon open-source libraries like USBHostSerial and ESPAsyncWebServer, also contributes to the broader ecosystem of tools and knowledge available to the ESP32 and embedded development communities. Future expansions, as outlined, could further enhance its capabilities, transforming Proxarch into an even more powerful and versatile tool for RFID research and interaction.
